@@ -1,0 +1,19 @@
+# Add this as one item under your existing Lovelace `views:` list.
+# The custom resource must be registered first:
+#   /local/tymetro-tracker-card.js?v=2
+# Type: JavaScript Module
+
+- path: tymetro
+  title: 機捷
+  icon: mdi:train
+  type: panel
+  theme: ios-dark-mode
+
+  cards:
+    - type: custom:tymetro-tracker-card
+      entity: sensor.tymetro_tracker
+      direction_entity: input_select.tymetro_direction
+      live_entity: input_boolean.tymetro_live_mode
+      timer_entity: timer.tymetro_live_session
+      static_entity: sensor.tymetro_static_model_raw
+      liveboard_entity: sensor.tymetro_liveboard_raw

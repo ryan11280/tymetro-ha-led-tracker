@@ -1,0 +1,63 @@
+alias: "TYMetro - Live Session Control"
+description: "Live Mode 最長 15 分鐘，可手動提前關閉；HA 重啟時強制回到 OFF"
+mode: restart
+
+triggers:
+  - trigger: state
+    entity_id: input_boolean.tymetro_live_mode
+    to: "on"
+    id: live_on
+
+  - trigger: state
+    entity_id: input_boolean.tymetro_live_mode
+    to: "off"
+    id: live_off
+
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.tymetro_live_session
+    id: timeout
+
+  - trigger: homeassistant
+    event: start
+    id: ha_start
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: live_on
+        sequence:
+          - action: timer.start
+            target:
+              entity_id: timer.tymetro_live_session
+            data:
+              duration: "00:15:00"
+
+      - conditions:
+          - condition: trigger
+            id: live_off
+        sequence:
+          - action: timer.cancel
+            target:
+              entity_id: timer.tymetro_live_session
+
+      - conditions:
+          - condition: trigger
+            id: timeout
+        sequence:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.tymetro_live_mode
+
+      - conditions:
+          - condition: trigger
+            id: ha_start
+        sequence:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.tymetro_live_mode
+          - action: timer.cancel
+            target:
+              entity_id: timer.tymetro_live_session

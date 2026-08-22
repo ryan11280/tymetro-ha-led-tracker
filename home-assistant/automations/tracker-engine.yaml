@@ -1,0 +1,24 @@
+alias: "TYMetro - Tracker Engine"
+description: "每 5 秒更新 A1-A9 列車位置模型與 LED Frames"
+mode: restart
+
+triggers:
+  - trigger: time_pattern
+    seconds: "/5"
+
+  - trigger: state
+    entity_id: input_select.tymetro_direction
+
+  - trigger: state
+    entity_id: input_boolean.tymetro_live_mode
+
+  - trigger: state
+    entity_id: sensor.tymetro_static_model_raw
+    attribute: fetched_at
+
+  - trigger: state
+    entity_id: sensor.tymetro_liveboard_raw
+    attribute: fetched_at
+
+actions:
+  - action: python_script.tymetro_tracker

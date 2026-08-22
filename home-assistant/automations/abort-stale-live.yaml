@@ -1,0 +1,38 @@
+alias: "TYMetro - Abort Stale Live"
+description: "TDX 即時資料持續過舊時，自動結束 Live Session"
+mode: restart
+
+triggers:
+  - trigger: state
+    entity_id: input_boolean.tymetro_live_mode
+    to: "on"
+
+actions:
+  - delay: "00:00:40"
+
+  - condition: state
+    entity_id: input_boolean.tymetro_live_mode
+    state: "on"
+
+  - condition: state
+    entity_id: sensor.tymetro_tracker
+    state: "schedule_live_stale"
+
+  - action: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.tymetro_live_mode
+
+  - action: persistent_notification.create
+    data:
+      title: "TYMetro 即時資料暫時不可用"
+      message: >-
+        TDX LiveBoard API 可連線，但桃捷來源資料已過期約
+        {{
+          (
+            state_attr(
+              'sensor.tymetro_tracker',
+              'live_source_age_seconds'
+            ) | int(0) / 60
+          ) | round(0)
+        }}
+        分鐘。已自動結束 Live Mode，Tracker 繼續使用官方時刻表模擬。

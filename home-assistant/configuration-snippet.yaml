@@ -1,0 +1,266 @@
+# ============================================================
+# TYMetro Home Assistant configuration snippet
+#
+# IMPORTANT:
+# Merge each top-level key into your existing configuration.yaml.
+# Do not create duplicate `recorder:`, `rest:`, `rest_command:`,
+# `template:`, or `python_script:` keys.
+# ============================================================
+
+python_script:
+
+recorder:
+  exclude:
+    entities:
+      - sensor.tymetro_liveboard_raw
+      - sensor.tymetro_static_model_raw
+      - sensor.tymetro_tracker
+      - sensor.tymetro_led_frame_a
+      - sensor.tymetro_led_frame_b
+
+# ============================================================
+# TDX authentication
+#
+# secrets.yaml:
+# tdx_auth_payload: 'grant_type=client_credentials&client_id=XXX&client_secret=XXX'
+# ============================================================
+
+rest:
+  - resource: "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token"
+    method: POST
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
+    payload: !secret tdx_auth_payload
+    scan_interval: 43200
+    timeout: 15
+
+    sensor:
+      - name: "TDX Token"
+        unique_id: tdx_token
+        value_template: >
+          {{ value_json.expires_in | int(0) }}
+        json_attributes:
+          - access_token
+          - expires_in
+          - token_type
+
+# ============================================================
+# TDX REST commands
+# ============================================================
+
+rest_command:
+  tymetro_liveboard:
+    url: "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/LiveBoard/TYMC?%24top=200&%24format=JSON"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ state_attr('sensor.tdx_token', 'access_token') }}"
+      Accept: "application/json"
+    timeout: 15
+
+  tymetro_s2s:
+    url: "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/S2STravelTime/TYMC?%24top=100&%24format=JSON"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ state_attr('sensor.tdx_token', 'access_token') }}"
+      Accept: "application/json"
+    timeout: 20
+
+  tymetro_stopping_pattern:
+    url: "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/StoppingPattern/TYMC?%24top=100&%24format=JSON"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ state_attr('sensor.tdx_token', 'access_token') }}"
+      Accept: "application/json"
+    timeout: 20
+
+  tymetro_timetable_a1:
+    url: "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/StationTimeTable/TYMC?%24filter=StationID%20eq%20%27A1%27&%24top=100&%24format=JSON"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ state_attr('sensor.tdx_token', 'access_token') }}"
+      Accept: "application/json"
+    timeout: 30
+
+  tymetro_timetable_a8:
+    url: "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/StationTimeTable/TYMC?%24filter=StationID%20eq%20%27A8%27&%24top=100&%24format=JSON"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ state_attr('sensor.tdx_token', 'access_token') }}"
+      Accept: "application/json"
+    timeout: 30
+
+# ============================================================
+# Trigger-based template entities
+# ============================================================
+
+template:
+  # ----------------------------------------------------------
+  # LiveBoard raw ingestion
+  #
+  # Immediate fetch when Live Mode turns on, then every 30 sec
+  # while Live Mode remains on.
+  # ----------------------------------------------------------
+  - triggers:
+      - trigger: state
+        entity_id: input_boolean.tymetro_live_mode
+        to: "on"
+
+      - trigger: time_pattern
+        seconds: "/30"
+
+    conditions:
+      - condition: state
+        entity_id: input_boolean.tymetro_live_mode
+        state: "on"
+
+    actions:
+      - if:
+          - condition: template
+            value_template: >
+              {{ state_attr('sensor.tdx_token', 'access_token') in [none, ''] }}
+        then:
+          - action: homeassistant.update_entity
+            continue_on_error: true
+            target:
+              entity_id: sensor.tdx_token
+
+          - wait_template: >
+              {{ state_attr('sensor.tdx_token', 'access_token') not in [none, ''] }}
+            timeout: "00:00:30"
+            continue_on_timeout: false
+
+      - action: rest_command.tymetro_liveboard
+        response_variable: tdx_live
+
+      - variables:
+          tdx_body: >
+            {% if tdx_live['content'] is string %}
+              {{ tdx_live['content'] | from_json }}
+            {% else %}
+              {{ tdx_live['content'] }}
+            {% endif %}
+
+    sensor:
+      - name: "TYMetro LiveBoard Raw"
+        unique_id: tymetro_liveboard_raw
+
+        state: >
+          {% if tdx_live['status'] == 200 %}
+            {{ tdx_body | count }}
+          {% else %}
+            -1
+          {% endif %}
+
+        attributes:
+          http_status: >
+            {{ tdx_live['status'] }}
+
+          fetched_at: >
+            {{ now().isoformat() }}
+
+          records: >
+            {% set ns = namespace(items=[]) %}
+            {% if tdx_live['status'] == 200 %}
+              {% for r in tdx_body %}
+                {% if r.get('StationID', '') in
+                  ['A1','A2','A3','A4','A5','A6','A7','A8','A9'] %}
+                  {% set ns.items = ns.items + [r] %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.items }}
+
+  # ----------------------------------------------------------
+  # Static model ingestion
+  # ----------------------------------------------------------
+  - triggers:
+      - trigger: homeassistant
+        event: start
+
+      - trigger: time
+        at: "03:30:00"
+
+    actions:
+      - delay: "00:00:05"
+
+      - action: homeassistant.update_entity
+        continue_on_error: true
+        target:
+          entity_id: sensor.tdx_token
+
+      - wait_template: >
+          {{ state_attr('sensor.tdx_token', 'access_token') not in [none, ''] }}
+        timeout: "00:01:00"
+        continue_on_timeout: false
+
+      - action: rest_command.tymetro_s2s
+        response_variable: tymetro_s2s
+
+      - action: rest_command.tymetro_stopping_pattern
+        response_variable: tymetro_stop
+
+      - action: rest_command.tymetro_timetable_a1
+        response_variable: tymetro_tt_a1
+
+      - action: rest_command.tymetro_timetable_a8
+        response_variable: tymetro_tt_a8
+
+    sensor:
+      - name: "TYMetro Static Model Raw"
+        unique_id: tymetro_static_model_raw
+
+        state: >
+          {% if
+            tymetro_s2s['status'] == 200
+            and tymetro_stop['status'] == 200
+            and tymetro_tt_a1['status'] == 200
+            and tymetro_tt_a8['status'] == 200
+          %}
+            ready
+          {% else %}
+            error
+          {% endif %}
+
+        attributes:
+          fetched_at: >
+            {{ now().isoformat() }}
+
+          s2s_http: >
+            {{ tymetro_s2s['status'] }}
+
+          stopping_pattern_http: >
+            {{ tymetro_stop['status'] }}
+
+          timetable_a1_http: >
+            {{ tymetro_tt_a1['status'] }}
+
+          timetable_a8_http: >
+            {{ tymetro_tt_a8['status'] }}
+
+          s2s: >
+            {% if tymetro_s2s['content'] is string %}
+              {{ tymetro_s2s['content'] | from_json }}
+            {% else %}
+              {{ tymetro_s2s['content'] }}
+            {% endif %}
+
+          stopping_patterns: >
+            {% if tymetro_stop['content'] is string %}
+              {{ tymetro_stop['content'] | from_json }}
+            {% else %}
+              {{ tymetro_stop['content'] }}
+            {% endif %}
+
+          timetable_a1: >
+            {% if tymetro_tt_a1['content'] is string %}
+              {{ tymetro_tt_a1['content'] | from_json }}
+            {% else %}
+              {{ tymetro_tt_a1['content'] }}
+            {% endif %}
+
+          timetable_a8: >
+            {% if tymetro_tt_a8['content'] is string %}
+              {{ tymetro_tt_a8['content'] | from_json }}
+            {% else %}
+              {{ tymetro_tt_a8['content'] }}
+            {% endif %}
