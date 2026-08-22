@@ -1,7 +1,7 @@
-# Add this as one item under your existing Lovelace `views:` list.
-# The custom resource must be registered first:
+# 將這段加入既有 Lovelace Dashboard 的 `views:` 清單。
+# 請先註冊 Custom Card Resource：
 #   /local/tymetro-tracker-card.js?v=2
-# Type: JavaScript Module
+# 類型：JavaScript Module
 
 - path: tymetro
   title: 機捷

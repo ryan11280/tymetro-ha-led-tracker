@@ -1,5 +1,5 @@
 # ============================================================
-# TYMetro A1-A9 LED Controller
+# TYMetro A1～A9 LED 控制器
 # NodeMCU v2 / ESP8266 + SN74HC595
 # ============================================================
 
@@ -30,7 +30,7 @@ wifi:
 captive_portal:
 
 # ============================================================
-# Shift register
+# SN74HC595 移位暫存器
 # ============================================================
 
 sn74hc595:
@@ -41,7 +41,7 @@ sn74hc595:
     sr_count: 1
 
 # ============================================================
-# Station LEDs
+# 車站 LED
 # A1-A8 = SN74HC595 QA-QH
 # A9    = D0 / GPIO16
 # ============================================================
@@ -128,8 +128,8 @@ switch:
       inverted: false
 
 # ============================================================
-# Test controls
-# Renderer pauses temporarily while tests run.
+# 測試控制
+# 執行測試時會暫時停止正常 Frame Renderer。
 # ============================================================
 
 button:
@@ -194,7 +194,7 @@ script:
       - switch.turn_off: tymetro_a8
       - switch.turn_off: tymetro_a9
 
-      # A1 -> A9
+      # A1 → A9
       - switch.turn_on: tymetro_a1
       - delay: 350ms
       - switch.turn_off: tymetro_a1
@@ -223,7 +223,7 @@ script:
       - delay: 350ms
       - switch.turn_off: tymetro_a9
 
-      # A8 -> A1
+      # A8 → A1
       - switch.turn_on: tymetro_a8
       - delay: 350ms
       - switch.turn_off: tymetro_a8
@@ -253,7 +253,7 @@ script:
           id(tymetro_renderer_paused) = false;
 
 # ============================================================
-# Frame input from Home Assistant
+# 從 Home Assistant 接收 Frame A / Frame B
 # ============================================================
 
 sensor:
@@ -268,7 +268,7 @@ sensor:
     internal: true
 
 # ============================================================
-# Renderer state
+# Renderer 狀態
 # ============================================================
 
 globals:
@@ -283,7 +283,7 @@ globals:
     initial_value: 'false'
 
 # ============================================================
-# 600 ms frame renderer
+# 600 ms Frame Renderer
 # ============================================================
 
 interval:

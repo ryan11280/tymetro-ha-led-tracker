@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Conservative public-repository sanity scanner.
+"""公開 Repository 前的基本敏感資訊檢查器。
 
-This is intentionally small and dependency-free. It catches common accidental
-secrets/network identifiers, but it cannot prove that a repository is safe.
-Always review Git history with a dedicated secret scanner before going public.
+此工具刻意保持簡單且不依賴外部套件，用來抓常見的 Credential、私人網路位址與其他可能誤提交的敏感資訊。
+它只能作為輔助檢查，不能保證 Repository 絕對安全；公開前仍應另外檢查完整 Git History。
 """
 
 from __future__ import annotations
@@ -31,15 +30,15 @@ PLACEHOLDER_WORDS = {
 
 PATTERNS = [
     (
-        "private IPv4 address",
+        "私人 IPv4 位址",
         re.compile(r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b"),
     ),
     (
-        "email address",
+        "Email 位址",
         re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I),
     ),
     (
-        "Home Assistant long-lived token-like value",
+        "疑似 Home Assistant Long-Lived Token",
         re.compile(r"\beyJ[A-Za-z0-9_-]{30,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b"),
     ),
 ]
@@ -48,7 +47,7 @@ ASSIGNMENT_PATTERNS = [
     ("client_secret", re.compile(r"client_secret\s*[=:]\s*['\"]?([^'\"&\s]+)", re.I)),
     ("client_id", re.compile(r"client_id\s*[=:]\s*['\"]?([^'\"&\s]+)", re.I)),
     ("password", re.compile(r"(?:password|passwd)\s*:\s*['\"]?([^'\"\s#]+)", re.I)),
-    ("encryption key", re.compile(r"(?:encryption[_ -]?key|tymetro_api_encryption_key)\s*:\s*['\"]?([^'\"\s#]+)", re.I)),
+    ("Encryption Key", re.compile(r"(?:encryption[_ -]?key|tymetro_api_encryption_key)\s*:\s*['\"]?([^'\"\s#]+)", re.I)),
 ]
 
 ALLOWED_ASSIGNMENT_VALUES = PLACEHOLDER_WORDS | {
@@ -61,7 +60,7 @@ def should_scan(path: Path) -> bool:
     if any(part in SKIP_DIRS for part in path.parts):
         return False
     if path.name == "public-safety-check.py":
-        return False  # don't flag the scanner's own regex examples
+        return False  # 不掃描本檔自身的 Regex 範例
     return path.suffix.lower() in TEXT_EXTENSIONS or path.name in {".gitignore"}
 
 
@@ -72,7 +71,7 @@ def placeholder_context(line: str) -> bool:
 def main() -> int:
     findings: list[str] = []
 
-    # Sensitive filenames that should never exist in this repository tree.
+    # 不應出現在公開 Repository 的敏感檔名。
     for path in ROOT.rglob("*"):
         if not path.is_file():
             continue
@@ -80,9 +79,9 @@ def main() -> int:
         if any(part in SKIP_DIRS for part in rel.parts):
             continue
         if path.name == "secrets.yaml":
-            findings.append(f"{rel}: real secrets.yaml filename present")
+            findings.append(f"{rel}: 發現真正的 secrets.yaml 檔名")
         if path.suffix.lower() in {".pem", ".p12", ".pfx"}:
-            findings.append(f"{rel}: private-key/certificate container file present")
+            findings.append(f"{rel}: 發現可能的 Private Key / Certificate Container")
 
     for path in ROOT.rglob("*"):
         if not path.is_file():
@@ -98,18 +97,18 @@ def main() -> int:
 
         for lineno, line in enumerate(text.splitlines(), 1):
             if placeholder_context(line):
-                # Placeholder/example lines are intentionally public.
+                # Placeholder / example 是刻意公開的範例。
                 continue
 
             for label, pattern in PATTERNS:
                 if pattern.search(line):
-                    findings.append(f"{rel}:{lineno}: possible {label}: {line.strip()[:180]}")
+                    findings.append(f"{rel}:{lineno}: 可能包含 {label}: {line.strip()[:180]}")
 
-            # ESPHome encryption keys are often represented as a plain YAML `key:`
-            # under `api.encryption`. Flag only values that actually look like long key material.
+            # ESPHome Encryption Key 常以 YAML `key:` 表示。
+            # 只對看起來像真實長金鑰的內容提出警告。
             yaml_key = re.match(r"^\s*key:\s*['\"]?([A-Za-z0-9+/]{32,}={0,2})['\"]?\s*$", line)
             if yaml_key:
-                findings.append(f"{rel}:{lineno}: possible literal encryption key: {line.strip()[:180]}")
+                findings.append(f"{rel}:{lineno}: 可能包含明文 Encryption Key: {line.strip()[:180]}")
 
             for label, pattern in ASSIGNMENT_PATTERNS:
                 match = pattern.search(line)
@@ -118,21 +117,21 @@ def main() -> int:
                 value = match.group(1)
                 if value in ALLOWED_ASSIGNMENT_VALUES or value.startswith("{{"):
                     continue
-                # YAML !secret is usually captured as the first token; allow it.
+                # YAML `!secret` 是合法的安全引用。
                 if "!secret" in line:
                     continue
-                findings.append(f"{rel}:{lineno}: possible literal {label}: {line.strip()[:180]}")
+                findings.append(f"{rel}:{lineno}: 可能包含明文 {label}: {line.strip()[:180]}")
 
     if findings:
-        print("PUBLIC SAFETY CHECK: REVIEW REQUIRED")
+        print("公開安全檢查：需要人工確認")
         for item in findings:
             print(f" - {item}")
-        print("\nThis script is heuristic. Review each result and scan Git history separately.")
+        print("\n此工具是啟發式掃描。請逐項確認結果，並另外掃描完整 Git History。")
         return 1
 
-    print("PUBLIC SAFETY CHECK: PASS")
-    print("No obvious literal credentials, private IPv4 addresses, or personal email addresses were found in the current working tree.")
-    print("Still scan Git history before making an existing repository public.")
+    print("公開安全檢查：PASS")
+    print("目前工作目錄未偵測到明顯的明文 Credential、私人 IPv4 位址或個人 Email。")
+    print("若這是原本的 Private Repository，改成 Public 前仍需另外檢查完整 Git History。")
     return 0
 
 

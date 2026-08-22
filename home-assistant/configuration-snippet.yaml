@@ -1,10 +1,10 @@
 # ============================================================
-# TYMetro Home Assistant configuration snippet
+# TYMetro Home Assistant 設定片段
 #
-# IMPORTANT:
-# Merge each top-level key into your existing configuration.yaml.
-# Do not create duplicate `recorder:`, `rest:`, `rest_command:`,
-# `template:`, or `python_script:` keys.
+# 重要：
+# 請把各個 top-level key 合併進你既有的 configuration.yaml。
+# 不要重複建立 `recorder:`、`rest:`、`rest_command:`、
+# `template:` 或 `python_script:` top-level key。
 # ============================================================
 
 python_script:
@@ -19,7 +19,7 @@ recorder:
       - sensor.tymetro_led_frame_b
 
 # ============================================================
-# TDX authentication
+# TDX 驗證
 #
 # secrets.yaml:
 # tdx_auth_payload: 'grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET'
@@ -90,15 +90,15 @@ rest_command:
     timeout: 30
 
 # ============================================================
-# Trigger-based template entities
+# Trigger-based Template Entities
 # ============================================================
 
 template:
   # ----------------------------------------------------------
-  # LiveBoard raw ingestion
+  # LiveBoard 原始資料擷取
   #
-  # Immediate fetch when Live Mode turns on, then every 30 sec
-  # while Live Mode remains on.
+  # Live Mode 開啟時立即抓一次，之後每 30 秒更新。
+  # 只有 Live Mode 維持 ON 時才會執行。
   # ----------------------------------------------------------
   - triggers:
       - trigger: state
@@ -171,7 +171,7 @@ template:
             {{ ns.items }}
 
   # ----------------------------------------------------------
-  # Static model ingestion
+  # Static Model 靜態資料擷取
   # ----------------------------------------------------------
   - triggers:
       - trigger: homeassistant

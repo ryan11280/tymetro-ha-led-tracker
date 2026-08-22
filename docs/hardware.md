@@ -1,116 +1,139 @@
-# Physical LED Hardware
+# 實體 LED 硬體
 
-This document describes the **verified A1–A9 breadboard prototype** in enough detail to reproduce, debug, or later convert it to perfboard/PCB.
+本文件完整記錄目前已實際驗證的 **A1～A9 Breadboard 實體 LED 原型**。
 
-## 1. What the hardware represents
+目標是即使過一段時間重新拆裝，也能依本文件重新搭建。
 
-The physical board is a **position display**, not a literal station-stop board.
+---
 
-There is one LED for each physical station position from A1 through A9:
+# 1. 最終原型架構
 
-| LED | Station |
-|---|---|
-| A1 | Taipei Main Station / 台北車站 |
-| A2 | Sanchong / 三重 |
-| A3 | New Taipei Industrial Park / 新北產業園區 |
-| A4 | Xinzhuang Fuduxin / 新莊副都心 |
-| A5 | Taishan / 泰山 |
-| A6 | Taishan Guihe / 泰山貴和 |
-| A7 | National Taiwan Sport University / 體育大學 |
-| A8 | Chang Gung Memorial Hospital / 長庚醫院 |
-| A9 | Linkou / 林口 |
+```text
+                         ┌──────────────────────────────┐
+                         │        NodeMCU v2            │
+                         │         ESP8266              │
+                         │                              │
+Home Assistant Frames ──→│ ESPHome 600ms Renderer      │
+                         │                              │
+                         │ D7 GPIO13 ─ DATA ─────┐      │
+                         │ D5 GPIO14 ─ CLOCK ────┼──┐   │
+                         │ D6 GPIO12 ─ LATCH ────┘  │   │
+                         │                          ▼   │
+                         │                    SN74HC595 │
+                         │                  QA ... QH   │
+                         │                   │     │    │
+                         │                   A1   A8    │
+                         │                              │
+                         │ D0 GPIO16 ─────────────→ A9  │
+                         └──────────────────────────────┘
+```
 
-A train does not have to stop at a station for its physical position to pass that LED coordinate. Express trains are therefore interpolated through skipped station positions.
+A1～A8 使用 SN74HC595。
 
-The board displays **one user-selected direction at a time**. Direction is chosen in Home Assistant; the LEDs themselves encode position only.
+A9 使用 NodeMCU `D0 / GPIO16`。
 
-## 2. Verified prototype BOM
+---
 
-### Required parts used by the prototype
+# 2. 元件清單
 
-- 1 × NodeMCU v2 / ESP8266
-- 1 × SN74HC595 8-bit shift register
-- 9 × red 5 mm LEDs
-- 9 × 330 Ω resistors
-- 1 × solderless breadboard
-- jumper wires
-- USB cable / USB power for NodeMCU
+| 元件 | 數量 | 說明 |
+|---|---:|---|
+| NodeMCU v2 / ESP8266 | 1 | ESPHome 主控制器 |
+| SN74HC595 | 1 | 8-bit serial-in / parallel-out 移位暫存器 |
+| 5 mm 紅色 LED | 9 | A1～A9 |
+| 330 Ω 電阻 | 9 | 每顆 LED 一顆 |
+| Breadboard | 1 | 原型 |
+| Jumper Wire | 多條 | 接線 |
+| USB Cable | 1 | NodeMCU 供電 |
 
-### Not used in the final verified prototype
+### 建議但目前不列入「已驗證原型」的元件
 
-- MB102 breadboard power module
+- 0.1 µF ceramic capacitor，放在 74HC595 VCC / GND 附近作去耦
 
-The final power path is:
+這是良好數位電路習慣，但目前 Breadboard 原型即使沒有它也已經正常運作，因此文件不把它寫成現有硬體的一部分。
+
+---
+
+# 3. 供電
+
+目前原型：
 
 ```text
 USB
  ↓
 NodeMCU
- ├─ 3V3 ──> breadboard logic/LED supply
- └─ GND ──> breadboard ground
+ ├─ 3V3 → Breadboard 3.3V
+ └─ GND → Breadboard GND
 ```
 
-### Recommended optional improvement
+SN74HC595 與 LED 使用同一組 3.3 V / GND reference。
 
-A `0.1 µF / 100 nF / 104` ceramic capacitor directly across the SN74HC595 VCC/GND pins is good digital-logic decoupling practice.
+目前不使用 MB102 Breadboard Power Supply。
 
-**Important:** it is documented as a recommendation, not as a verified component of the original breadboard build unless you physically add it.
+---
 
-## 3. Why SN74HC595 + GPIO16
+# 4. LED 極性
 
-The SN74HC595 provides eight outputs while consuming only three ESP8266 control lines:
+一般 5 mm LED：
 
 ```text
-DATA
-CLOCK
-LATCH
+長腳 = Anode / 正極
+短腳 = Cathode / 負極
 ```
 
-Those eight outputs map naturally to A1–A8.
-
-A ninth output is still required for A9, so NodeMCU `D0 / GPIO16` directly drives A9.
+本專案統一：
 
 ```text
-NodeMCU
-  D7 / GPIO13 ---- DATA  -----┐
-  D5 / GPIO14 ---- CLOCK -----┼--> SN74HC595 --> QA..QH --> A1..A8
-  D6 / GPIO12 ---- LATCH -----┘
-
-  D0 / GPIO16 ---------------------------------------> A9
+Output
+  ↓
+LED Anode 長腳
+  ↓
+LED
+  ↓
+LED Cathode 短腳
+  ↓
+330 Ω
+  ↓
+GND
 ```
 
-## 4. LED electrical orientation
+所以 GPIO / 74HC595 output 為 HIGH 時 LED 亮。
 
-Every LED gets its **own** current-limiting resistor.
+---
+
+# 5. 為什麼每顆 LED 都要一顆 330 Ω？
+
+每個 LED 都是獨立 branch。
+
+正確：
 
 ```text
-GPIO/output
-    │
-    └──> LED anode (long leg)
-          LED cathode (short leg)
-                  │
-                 330 Ω
-                  │
-                 GND
+QA → LED A1 → 330Ω → GND
+QB → LED A2 → 330Ω → GND
+QC → LED A3 → 330Ω → GND
+...
 ```
 
-The outputs are active-high in ESPHome:
+不要：
 
 ```text
-output HIGH -> LED ON
-output LOW  -> LED OFF
+多顆 LED
+   ↓
+共用一顆 330Ω
+   ↓
+GND
 ```
 
-Do not place one resistor on a shared return for multiple LEDs; each LED needs an individual resistor.
+因為不同 LED 同時點亮時會互相影響電流。
 
-At 3.3 V with a red LED and 330 Ω, LED current is only a few milliamps per channel. This is appropriate for a low-brightness indicator prototype. If the design grows into higher-current LEDs, multiple LEDs per station, long LED strips, or much higher brightness, use transistor/MOSFET drivers rather than loading the SN74HC595 directly.
+---
 
-## 5. Exact verified breadboard LED positions
+# 6. A1～A9 Breadboard 位置
 
-The prototype LEDs were arranged along row `E`:
+目前實際搭建位置：
 
-| Station | Anode / long leg | Cathode / short leg |
-|---|---:|---:|
+| 站 | 長腳 / Anode | 短腳 / Cathode |
+|---|---|---|
 | A1 | E0 | E1 |
 | A2 | E5 | E6 |
 | A3 | E10 | E11 |
@@ -121,258 +144,552 @@ The prototype LEDs were arranged along row `E`:
 | A8 | E35 | E36 |
 | A9 | E40 | E41 |
 
-Each cathode column then connects through its own 330 Ω resistor to GND.
-
-This spacing is not electrically required; it simply created a clean A1→A9 physical line on the prototype.
-
-## 6. Exact verified SN74HC595 breadboard orientation
-
-The IC straddles the breadboard center trench around columns 45–52.
-
-Prototype orientation:
-
-- **notch facing left**
-- one side of the IC occupies `E45–E52`
-- the opposite side occupies `F45–F52`
-
-With that exact orientation:
+也就是每站間隔約 5 格：
 
 ```text
-           notch / pin-1 end
-                 ←
-
-E45  pin16 VCC            pin1  QB   F45
-E46  pin15 QA             pin2  QC   F46
-E47  pin14 SER / DATA     pin3  QD   F47
-E48  pin13 OE             pin4  QE   F48
-E49  pin12 RCLK / LATCH   pin5  QF   F49
-E50  pin11 SRCLK / CLOCK  pin6  QG   F50
-E51  pin10 SRCLR / MR     pin7  QH   F51
-E52  pin9  QH'            pin8  GND  F52
+A1     A2     A3     A4     A5     A6     A7     A8     A9
+E0     E5     E10    E15    E20    E25    E30    E35    E40
 ```
 
-Always verify the physical IC notch/dot before trusting breadboard coordinates. Rotating the chip 180° changes every pin.
+視覺上就形成一條 A1～A9 的車站線。
 
-## 7. Complete SN74HC595 wiring table
+每顆 LED：
 
-| 74HC595 pin | Prototype coordinate | Signal | Connect to |
-|---:|---|---|---|
-| 16 | E45 | VCC | NodeMCU 3V3 |
-| 15 | E46 | QA | A1 anode |
-| 14 | E47 | SER / DATA | NodeMCU D7 / GPIO13 |
-| 13 | E48 | OE | GND |
-| 12 | E49 | RCLK / LATCH | NodeMCU D6 / GPIO12 |
-| 11 | E50 | SRCLK / CLOCK | NodeMCU D5 / GPIO14 |
-| 10 | E51 | SRCLR / MR | NodeMCU 3V3 |
-| 9 | E52 | QH' serial out | not connected |
-| 1 | F45 | QB | A2 anode |
-| 2 | F46 | QC | A3 anode |
-| 3 | F47 | QD | A4 anode |
-| 4 | F48 | QE | A5 anode |
-| 5 | F49 | QF | A6 anode |
-| 6 | F50 | QG | A7 anode |
-| 7 | F51 | QH | A8 anode |
-| 8 | F52 | GND | GND |
+```text
+Anode → 前一格
+Cathode → 後一格 → 330Ω → GND
+```
 
-### Control-pin rationale
+---
 
-- `OE` is active-low → tied to GND so outputs are always enabled.
-- `SRCLR / MR` is active-low → tied to 3.3 V so the register is not asynchronously cleared.
-- `QH'` is only required for cascading another shift register → unused in the single-register prototype.
+# 7. SN74HC595 放置方向
 
-## 8. NodeMCU pin map
+目前 IC 跨 Breadboard 中央溝槽：
 
-| NodeMCU label | ESP8266 GPIO | Function |
+```text
+E45 ～ E52
+F45 ～ F52
+```
+
+IC 缺口朝左。
+
+從上方看：
+
+```text
+             缺口
+              ◀
+
+      E side             F side
+
+E45  pin16 VCC       pin1  QB   F45
+E46  pin15 QA        pin2  QC   F46
+E47  pin14 SER       pin3  QD   F47
+E48  pin13 OE        pin4  QE   F48
+E49  pin12 RCLK      pin5  QF   F49
+E50  pin11 SRCLK     pin6  QG   F50
+E51  pin10 SRCLR     pin7  QH   F51
+E52  pin9  QH'       pin8  GND  F52
+```
+
+**接線前一定先確認缺口方向。**
+
+74HC595 左右顛倒時，pin number 會全部錯位。
+
+---
+
+# 8. SN74HC595 完整接線
+
+## Power / Control
+
+| Pin | 名稱 | 接法 |
+|---:|---|---|
+| 16 | VCC | 3.3 V |
+| 15 | QA | A1 |
+| 14 | SER / DATA | NodeMCU D7 / GPIO13 |
+| 13 | OE | GND |
+| 12 | RCLK / LATCH | NodeMCU D6 / GPIO12 |
+| 11 | SRCLK / CLOCK | NodeMCU D5 / GPIO14 |
+| 10 | SRCLR / MR | 3.3 V |
+| 9 | QH' | 不接 |
+| 8 | GND | GND |
+
+## Output
+
+| Pin | Output | 車站 |
+|---:|---|---|
+| 15 | QA | A1 |
+| 1 | QB | A2 |
+| 2 | QC | A3 |
+| 3 | QD | A4 |
+| 4 | QE | A5 |
+| 5 | QF | A6 |
+| 6 | QG | A7 |
+| 7 | QH | A8 |
+
+A9：
+
+```text
+NodeMCU D0 / GPIO16 → A9
+```
+
+---
+
+# 9. NodeMCU 使用的 GPIO
+
+| NodeMCU Label | GPIO | 用途 |
 |---|---:|---|
 | D7 | GPIO13 | 74HC595 DATA |
 | D5 | GPIO14 | 74HC595 CLOCK |
 | D6 | GPIO12 | 74HC595 LATCH |
-| D0 | GPIO16 | A9 direct LED output |
-| 3V3 | — | breadboard / 74HC595 VCC |
-| GND | — | common ground |
+| D0 | GPIO16 | A9 LED |
 
-The matching ESPHome configuration is in [`../esphome/tymetro-led.yaml`](../esphome/tymetro-led.yaml).
+所以只使用 4 個 NodeMCU GPIO 就完成 9 顆 LED。
 
-## 9. Station output map
+---
 
-| Station | Hardware source | ESPHome output index |
-|---|---|---:|
-| A1 | 74HC595 QA | 0 |
-| A2 | 74HC595 QB | 1 |
-| A3 | 74HC595 QC | 2 |
-| A4 | 74HC595 QD | 3 |
-| A5 | 74HC595 QE | 4 |
-| A6 | 74HC595 QF | 5 |
-| A7 | 74HC595 QG | 6 |
-| A8 | 74HC595 QH | 7 |
-| A9 | NodeMCU GPIO16 | direct GPIO |
+# 10. 為什麼 OE 要接 GND？
 
-## 10. Power rules
-
-### Verified simple topology
-
-Use one source:
+74HC595：
 
 ```text
-USB -> NodeMCU -> 3V3/GND -> breadboard
+OE = Output Enable
 ```
 
-### Ground is mandatory
+它是 Active-Low。
 
-The NodeMCU, 74HC595, and all LED cathode resistor returns must share the same GND reference.
-
-### Breadboard split rails
-
-Some breadboards split the red/blue rails in the middle. If you rely on the full rail length, verify continuity and bridge split sections with jumpers as needed.
-
-### Do not casually add MB102 power
-
-Do not simultaneously power the same 3.3 V rail from the NodeMCU and an unrelated breadboard supply unless the power architecture is deliberately redesigned. The MB102 is therefore not part of this reference build.
-
-## 11. Hardware bring-up sequence
-
-Do not start by debugging Home Assistant, TDX, ESPHome, and the breadboard at the same time.
-
-Use this order:
-
-### Stage A — power / polarity
-
-1. USB-power the NodeMCU.
-2. Confirm 3.3 V and GND rails.
-3. Verify LED long/short leg orientation.
-4. Verify every LED has its own resistor.
-
-### Stage B — A9 direct GPIO
-
-Test A9 independently.
-
-Why first? It bypasses the 74HC595 and proves:
-
-- ESP8266 GPIO switching
-- LED polarity
-- resistor path
-- common GND
-
-### Stage C — shift-register outputs
-
-Test A1–A8 individually.
-
-If A9 works and all A1–A8 fail, focus on the 74HC595 wiring rather than the common LED wiring.
-
-### Stage D — full output tests
-
-Run:
-
-- `All LEDs Off`
-- `All LEDs On`
-- `LED Chase Test`
-
-Expected chase:
+因此：
 
 ```text
-A1 -> A2 -> A3 -> A4 -> A5 -> A6 -> A7 -> A8 -> A9
-A8 -> A7 -> A6 -> A5 -> A4 -> A3 -> A2 -> A1
+OE = LOW
 ```
 
-### Stage E — Home Assistant renderer
+output 才會正常輸出。
 
-Only after all nine physical outputs are known-good should Frame A / Frame B control be treated as the source of truth.
+本專案直接：
 
-## 12. How the normal ESPHome renderer interacts with tests
+```text
+pin 13 OE → GND
+```
 
-The normal renderer runs every 600 ms.
+---
 
-Test buttons temporarily set:
+# 11. 為什麼 SRCLR 要接 3.3 V？
+
+`SRCLR` / `MR` 是 Active-Low reset。
+
+如果拉低：
+
+```text
+Shift Register data 被清空
+```
+
+因此正常使用固定：
+
+```text
+pin 10 SRCLR → 3.3V
+```
+
+避免浮動。
+
+---
+
+# 12. ESPHome Output Mapping
+
+A1～A8：
+
+```yaml
+pin:
+  sn74hc595: tymetro_595
+  number: 0..7
+```
+
+對應：
+
+```text
+number 0 = QA = A1
+number 1 = QB = A2
+...
+number 7 = QH = A8
+```
+
+A9：
+
+```yaml
+pin:
+  number: GPIO16
+```
+
+---
+
+# 13. 開機安全狀態
+
+所有 LED switch：
+
+```yaml
+restore_mode: ALWAYS_OFF
+```
+
+目的：
+
+> NodeMCU 剛開機或 HA 還沒連線時，不要保留上一次的燈號。
+
+---
+
+# 14. 硬體測試順序
+
+建議每次重新搭建後按照以下順序驗證。
+
+## Step 1：確認電源
+
+確認：
+
+```text
+NodeMCU 3V3 → 74HC595 VCC
+NodeMCU GND → 74HC595 GND
+所有 LED resistor → 同一個 GND
+```
+
+## Step 2：All LEDs Off
+
+ESPHome：
+
+```text
+All LEDs Off
+```
+
+預期：
+
+```text
+A1～A9 全暗
+```
+
+## Step 3：All LEDs On
+
+```text
+All LEDs On
+```
+
+預期：
+
+```text
+A1～A9 全亮
+```
+
+這可以快速確認：
+
+- LED 極性
+- resistor
+- output
+- A9 GPIO16
+- 595 八個 channel
+
+## Step 4：Chase Test
+
+```text
+A1
+ ↓
+A2
+ ↓
+A3
+ ↓
+...
+ ↓
+A9
+ ↓
+A8
+ ↓
+...
+ ↓
+A1
+```
+
+如果順序正確，表示 QA～QH mapping 正確。
+
+## Step 5：接回 HA Frame
+
+確認 ESPHome log 有：
+
+```text
+sensor.tymetro_led_frame_a
+sensor.tymetro_led_frame_b
+```
+
+並開始隨 Tracker 更新。
+
+---
+
+# 15. Test Button 為什麼要 Pause Renderer？
+
+如果 ESPHome 正常 renderer 每 600 ms 都在更新 LED，而同時按：
+
+```text
+All LEDs On
+```
+
+renderer 下一輪可能馬上又把燈改回 HA Frame。
+
+所以測試時：
 
 ```text
 tymetro_renderer_paused = true
 ```
 
-so the live HA frame renderer cannot immediately overwrite a manual test.
+先暫停正常 renderer。
 
-After the test delay/script finishes:
+測試完成後：
 
 ```text
 tymetro_renderer_paused = false
 ```
 
-and normal tracker control resumes automatically.
+再交還 Frame A / B 控制。
 
-## 13. Troubleshooting decision tree
+---
 
-### Nothing lights
+# 16. 600 ms Renderer
 
-Check:
-
-1. NodeMCU power
-2. common GND
-3. LED polarity
-4. resistor path
-5. ESPHome switch state
-
-### A9 works, A1–A8 all fail
-
-The shared LED/GND concept is probably okay. Check the shift register:
+ESPHome 每 600 ms 執行：
 
 ```text
-pin16 VCC   -> 3.3V
-pin8  GND   -> GND
-pin10 SRCLR -> 3.3V
-pin13 OE    -> GND
-pin14 DATA  -> D7 / GPIO13
-pin11 CLOCK -> D5 / GPIO14
-pin12 LATCH -> D6 / GPIO12
+Frame A
+ ↓
+Frame B
+ ↓
+Frame A
+ ↓
+Frame B
 ```
 
-Then verify IC orientation.
+每次把 9-bit mask 拆成：
 
-### A1–A8 operate but order is wrong
+```text
+bit0 → A1
+bit1 → A2
+...
+bit8 → A9
+```
 
-Check the QA→A1, QB→A2 ... QH→A8 mapping.
+然後只在狀態真的改變時呼叫：
 
-If the physical wiring is otherwise sound, output numbering can also be corrected in ESPHome.
+```text
+turn_on()
+turn_off()
+```
 
-### One LED never lights
+避免無意義的重複 output。
 
-Swap-test the LED/resistor or temporarily drive the corresponding output with another known-good LED. This isolates:
+---
 
-- dead LED
-- reversed LED
-- bad resistor connection
-- broken jumper
-- output mapping issue
+# 17. 多班列車
 
-### LEDs appear to flicker unexpectedly
+例如同時有：
 
-First distinguish intentional frame animation from electrical instability.
+```text
+Train 1 在 A2
+Train 2 在 A6
+Train 3 在 A8→A9 中間
+```
 
-Intentional station-between behavior alternates **specific adjacent stations at a stable 600 ms cadence**. Random or very fast flicker suggests wiring/power issues.
+Tracker 會把所有 bit OR 起來。
 
-## 14. Physical display limitations
+例如某一 frame：
 
-### One direction at a time
+```text
+A2 = ON
+A6 = ON
+A8 = ON
+```
 
-The single row cannot unambiguously encode both directions. HA selects the direction shown.
+另一 frame：
 
-### Multiple trains at one position
+```text
+A2 = ON
+A6 = ON
+A9 = ON
+```
 
-LED bits are OR-combined. Two trains occupying the same represented station/segment do not create a “brighter two-train” state. The dashboard retains individual train objects and can distinguish them.
+所以實體 LED 能同時表示多班列車。
 
-### Nine physical coordinates only
+---
 
-The current hardware covers A1–A9. Extending to A22 requires additional output hardware and a new physical layout.
+# 18. 直達車經過不停靠站
 
-## 15. Future hardware revisions
+LED 表示的是：
 
-Reasonable next versions, only if there is a real requirement:
+> **物理位置**
 
-- second LED row for simultaneous opposite direction
-- second SN74HC595 / daisy chain
-- A1–A22 full-line board
-- perfboard / custom PCB
-- printed station labels
-- enclosure
-- transistor/MOSFET output stage for higher current
-- brightness control through a suitable driver / PWM architecture
+不是：
 
-The existing breadboard build should remain the **reference V1 implementation** because it is easy to understand, reproduce, and debug.
+> **這班車會不會停該站**
+
+例如直達車：
+
+```text
+A1 → A3
+```
+
+雖然不一定停 A2，但實際列車仍會經過 A2 附近。
+
+所以 LED 仍可能：
+
+```text
+A1 → A2 → A3
+```
+
+依物理位置亮過 A2。
+
+這是正常設計。
+
+---
+
+# 19. 常見故障
+
+## A1～A8 全部不亮，A9 正常
+
+優先檢查：
+
+```text
+74HC595 VCC
+74HC595 GND
+OE 是否 GND
+SRCLR 是否 3.3V
+DATA / CLOCK / LATCH
+IC 方向
+```
+
+因為 A9 不經過 74HC595。
+
+---
+
+## 只有某一站不亮
+
+例如只有 A4 不亮：
+
+檢查：
+
+1. LED 是否反向。
+2. LED 是否損壞。
+3. 330 Ω 是否接好。
+4. QD → A4 wire。
+5. 該 Breadboard row 是否插錯。
+6. ESPHome switch mapping。
+
+---
+
+## Chase 順序錯
+
+例如：
+
+```text
+A1
+A3
+A2
+A4
+```
+
+通常是：
+
+- QA/QB/QC output 線接錯
+- IC pin 判斷錯
+- ESPHome `number` mapping 錯
+
+---
+
+## 全部燈異常閃爍
+
+檢查：
+
+- GND 是否共地
+- 3.3 V 是否穩定
+- DATA/CLOCK/LATCH 是否鬆動
+- Breadboard jumper 是否接觸不良
+
+若未來做永久版本，建議在 74HC595 VCC / GND 附近加 0.1 µF 去耦。
+
+---
+
+## A9 行為與 A1～A8 不一致
+
+A9 是獨立：
+
+```text
+GPIO16
+```
+
+所以檢查：
+
+```text
+D0 / GPIO16 wire
+A9 LED 極性
+A9 resistor
+ESPHome GPIO16 switch
+```
+
+---
+
+# 20. 為什麼目前供電可行？
+
+目前只是：
+
+- 9 顆一般 LED
+- 74HC595
+- ESP8266 logic
+
+而且 LED 有 330 Ω 限流。
+
+這個小型 prototype 已實際正常運作。
+
+但若未來擴充：
+
+- 更多 LED
+- 高亮 LED
+- RGB LED
+- 多顆 Shift Register
+- 額外顯示器
+
+就不應直接假設 NodeMCU 3.3 V rail 一定適合，需重新做電流預算與電源設計。
+
+---
+
+# 21. 未來轉成洞洞板 / PCB
+
+若要永久化，建議：
+
+1. 保留相同 GPIO mapping。
+2. 74HC595 附近加 0.1 µF 去耦。
+3. 明確標示 A1～A9。
+4. 每顆 LED 保留獨立 resistor。
+5. 保留測試點：
+   - 3V3
+   - GND
+   - DATA
+   - CLOCK
+   - LATCH
+6. 若擴充 A10～A22，考慮串接更多 74HC595。
+
+---
+
+# 22. V1 硬體完成狀態
+
+目前已實際驗證：
+
+```text
+NodeMCU                   ✅
+SN74HC595                 ✅
+A1～A8 shift outputs      ✅
+A9 GPIO16                 ✅
+9 × 330Ω                  ✅
+All On                    ✅
+All Off                   ✅
+Chase                     ✅
+HA Frame A/B              ✅
+600ms Renderer            ✅
+多車                      ✅
+站間動畫                  ✅
+```
+
+所以若目標只是：
+
+> **A1～A9 一排實體列車位置顯示器**
+
+目前 V1 硬體可以視為完工。

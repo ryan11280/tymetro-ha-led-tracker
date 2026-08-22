@@ -1,161 +1,430 @@
-# LED Rendering Model
+# LED 顯示與動畫邏輯
 
-This document explains how continuous train position becomes a 9-LED physical display.
+本文件說明 Home Assistant 的列車位置如何轉換成 A1～A9 九顆實體 LED。
 
-## 1. Inputs
+---
 
-The Home Assistant tracker emits:
+# 1. 設計限制
+
+實體板只有：
+
+```text
+A1 A2 A3 A4 A5 A6 A7 A8 A9
+●  ●  ●  ●  ●  ●  ●  ●  ●
+```
+
+每個站只有一個離散 LED。
+
+所以無法像螢幕一樣真的把列車畫在：
+
+```text
+A5 ─────── ● ─────── A6
+```
+
+因此需要用時間上的動畫表示站間位置。
+
+---
+
+# 2. Tracker 每班列車的基本位置
+
+## 到站
+
+```yaml
+state: station
+station: A5
+```
+
+## 站間
+
+```yaml
+state: between
+from: A5
+to: A6
+progress: 0.58
+```
+
+`progress`：
+
+```text
+0.0 = 剛離開 from
+1.0 = 即將到達 to
+```
+
+---
+
+# 3. Frame A / Frame B
+
+Home Assistant 會產生：
 
 ```text
 sensor.tymetro_led_frame_a
 sensor.tymetro_led_frame_b
 ```
 
-Each state is an integer from `0` to `511` (`2^9 - 1`).
-
-Each bit maps to one physical station coordinate:
+每個都是：
 
 ```text
-bit:   8 7 6 5 4 3 2 1 0
-LED:   A9 A8 A7 A6 A5 A4 A3 A2 A1
+0 ～ 511
 ```
 
-## 2. Why two frames
+也就是 9-bit mask。
 
-Nine LEDs cannot directly show a train at 53% between two stations.
+---
 
-The tracker therefore translates continuous motion into two temporal frames.
+# 4. 到站顯示
 
-For A5 → A6:
-
-### First third
+列車在 A5：
 
 ```text
-progress < 0.333
-
-Frame A: A5
-Frame B: A5
+Frame A：A5 ON
+Frame B：A5 ON
 ```
 
-The train still visually belongs to A5.
-
-### Middle third
+ESPHome 即使 A/B 交替：
 
 ```text
-0.333 <= progress < 0.667
-
-Frame A: A5
-Frame B: A6
+A5 → A5 → A5 → A5
 ```
 
-ESPHome alternates the two LEDs, visually communicating that the train is between the stations.
-
-### Final third
+所以肉眼看到的是：
 
 ```text
-progress >= 0.667
-
-Frame A: A6
-Frame B: A6
+A5 穩定亮
 ```
 
-The train has visually advanced to A6.
+---
 
-## 3. At a station
+# 5. 站間動畫
 
-A stationary / dwelling train uses the same bit in both frames:
+A5 → A6 被分成三個視覺區段。
+
+## 前段
+
+列車還靠近 A5：
 
 ```text
-Frame A = A3
-Frame B = A3
+Frame A：A5
+Frame B：A5
 ```
 
-The LED therefore appears continuously lit.
+A5 穩定亮。
 
-## 4. ESPHome timing
+## 中段
 
-The ESP8266 alternates frame phase every:
+列車真正位於兩站中間：
+
+```text
+Frame A：A5
+Frame B：A6
+```
+
+ESP8266：
+
+```text
+A5 → 600ms → A6 → 600ms → A5...
+```
+
+肉眼理解為：
+
+```text
+列車正在 A5 / A6 之間
+```
+
+## 後段
+
+列車已靠近 A6：
+
+```text
+Frame A：A6
+Frame B：A6
+```
+
+A6 穩定亮。
+
+---
+
+# 6. 為什麼是 600 ms？
+
+太快：
+
+```text
+100～200 ms
+```
+
+可能只看成兩顆一起閃或視覺混合。
+
+太慢：
+
+```text
+1.5～2 秒
+```
+
+會感覺像兩個不相關的狀態。
+
+目前實機使用：
 
 ```text
 600 ms
 ```
 
-This animation is local to the microcontroller.
-
-Home Assistant only needs to update the two integer frame states whenever the trajectory engine changes them, rather than sending nine switch operations every 600 ms.
-
-## 5. Multiple trains
-
-All represented train bits are OR-combined into each frame.
-
-Example:
+可以清楚辨識：
 
 ```text
-Train 1: stable A1
-Train 2: middle A4 -> A5
-Train 3: stable A8
-
-Frame A: A1 + A4 + A8
-Frame B: A1 + A5 + A8
+A5 ↔ A6
 ```
 
-This was exercised in the real ESPHome renderer with more than one simultaneous station-between animation.
+且不會太急促。
 
-## 6. Direction
+---
 
-Direction is **not encoded in the LED pattern**.
+# 7. 為什麼不讓 Home Assistant 每 600 ms 更新？
 
-The user first selects one direction in Home Assistant:
+如果 HA 每 600 ms：
+
+```text
+更新 Entity
+→ API 傳給 ESPHome
+→ Switch 更新
+→ 再下一次
+```
+
+會製造大量沒有必要的 HA state churn。
+
+所以正確切法：
+
+```text
+Home Assistant
+每 5 秒
+ ↓
+Frame A / B
+
+ESPHome
+每 600 ms
+ ↓
+本機交替 Frame
+```
+
+這樣：
+
+- HA 負責低頻邏輯
+- ESP8266 負責高頻動畫
+
+---
+
+# 8. Bit Mapping
+
+```text
+bit 0 = A1
+bit 1 = A2
+bit 2 = A3
+bit 3 = A4
+bit 4 = A5
+bit 5 = A6
+bit 6 = A7
+bit 7 = A8
+bit 8 = A9
+```
+
+例如：
+
+```text
+A1 = 1 << 0 = 1
+A5 = 1 << 4 = 16
+A9 = 1 << 8 = 256
+```
+
+---
+
+# 9. 多車如何合併？
+
+假設：
+
+```text
+Train 1 = A2
+Train 2 = A5
+Train 3 = A7→A8 中段
+```
+
+Train 1：
+
+```text
+Frame A = A2
+Frame B = A2
+```
+
+Train 2：
+
+```text
+Frame A = A5
+Frame B = A5
+```
+
+Train 3：
+
+```text
+Frame A = A7
+Frame B = A8
+```
+
+合併：
+
+```text
+Frame A = A2 + A5 + A7
+Frame B = A2 + A5 + A8
+```
+
+因此所有 train mask 使用 bitwise OR。
+
+---
+
+# 10. 物理 LED 的資訊限制
+
+如果兩班列車剛好同時在 A5：
+
+```text
+Train 1 → A5
+Train 2 → A5
+```
+
+實體上仍然只會看到：
+
+```text
+A5 一顆燈亮
+```
+
+無法知道是 1 班還是 2 班。
+
+這是硬體本身的資訊限制。
+
+Dashboard 則可以同時顯示兩個 marker。
+
+---
+
+# 11. Direction
+
+V1 只有一排 LED，所以一次只顯示一個方向：
 
 ```text
 ← 往 A1 台北
 ```
 
-or:
+或：
 
 ```text
 往 A9 林口 →
 ```
 
-The tracker then generates frames only for that direction.
-
-This avoids trying to express too many semantics with a single LED row.
-
-## 7. Local vs Express
-
-The hardware does not blink differently for Local vs Express.
-
-That choice is intentional:
-
-- physical LEDs = position
-- Home Assistant dashboard = richer train metadata
-
-The dashboard can label trains `普` or `直`, but the physical board remains readable and simple.
-
-## 8. Express trains at skipped stations
-
-An Express service can pass a physical station coordinate without stopping there.
-
-The trajectory engine estimates pass-through time using the physical segment proportions derived from the Local runtime model, then renders the Express train along the same A1–A9 coordinate line.
-
-Therefore an A2 LED can briefly represent an Express train **passing the A2 physical position**, even though A2 is not an Express stop.
-
-## 9. Hardware vs dashboard semantics
-
-The dashboard intentionally does **not** mimic the physical two-frame limitation.
-
-The custom card receives continuous `from`, `to`, and `progress` values and places a train marker at an interpolated screen coordinate:
+方向由：
 
 ```text
-x = from_x + progress × (to_x - from_x)
+input_select.tymetro_direction
 ```
 
-CSS transitions then tween the marker smoothly until the next 5-second tracker update.
+控制。
 
-This produces two different but consistent renderers from the same train model:
+實體 LED 本身不另外用閃爍 encode 方向。
+
+---
+
+# 12. 普通 / 直達
+
+實體 LED 也不 encode：
 
 ```text
-canonical train model
-       ├── physical renderer -> 9 LEDs + temporal frames
-       └── dashboard renderer -> smooth continuous position
+普通
+直達
 ```
+
+因為一排九顆 LED 最重要的是快速看懂：
+
+> 「列車在哪裡」
+
+若加入：
+
+- 不同閃爍頻率
+- 不同 pulse
+- 複雜 blink code
+
+會讓位置判讀變得更困難。
+
+普通 / 直達留給 Dashboard 顯示。
+
+---
+
+# 13. 直達車不停 A2，為什麼 A2 還可能亮？
+
+因為 LED 表示物理位置。
+
+例如直達車：
+
+```text
+A1 → A3
+```
+
+它雖然不停 A2，但軌道仍經過 A2 區域。
+
+所以位置模型仍會經過：
+
+```text
+A1 → A2 → A3
+```
+
+只是 timetable model 不會建立 A2 停站 dwell。
+
+---
+
+# 14. ESPHome Renderer
+
+每 600 ms：
+
+1. 確認 renderer 未 paused。
+2. 確認 Frame A/B 不是 NaN。
+3. 依 phase 選 Frame A 或 B。
+4. 把 integer 拆成 9 個 bit。
+5. 比對目前 switch state。
+6. 只有狀態不同才切換。
+7. phase 反轉。
+
+概念：
+
+```cpp
+mask = phase ? frame_b : frame_a;
+
+A1 = mask & (1 << 0);
+A2 = mask & (1 << 1);
+...
+A9 = mask & (1 << 8);
+```
+
+---
+
+# 15. Dashboard 為什麼不直接照 Frame A/B 閃？
+
+因為 Dashboard 沒有九顆 LED 的限制。
+
+Tracker 本身已經知道：
+
+```text
+from
+to
+progress
+```
+
+所以 Web UI 可以直接用：
+
+```text
+x = x(from) + progress × (x(to) - x(from))
+```
+
+畫出連續位置。
+
+然後在每 5 秒資料更新之間用 CSS transition 平滑補間。
+
+因此：
+
+```text
+實體 LED = 離散位置 + 600ms 時間動畫
+Dashboard = 真正連續位置動畫
+```
+
+兩者都源自同一套 Tracker Model，但選擇最適合各自媒介的呈現方式。

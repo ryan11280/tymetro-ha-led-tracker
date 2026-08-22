@@ -1,18 +1,91 @@
-# Setup Guide
+# 安裝流程
 
-This guide assumes Home Assistant and ESPHome are already installed.
+這份文件假設你已經有一套正常運作的 Home Assistant 與 ESPHome。
 
-## 1. Assemble the hardware
+---
 
-Follow [hardware.md](hardware.md).
+# 1. 硬體
 
-Do not proceed to TDX integration until all nine LEDs pass manual and chase tests.
+先依：
 
-## 2. Create Home Assistant helpers
+[hardware.md](hardware.md)
 
-Create the helpers exactly as documented in [../home-assistant/helpers.md](../home-assistant/helpers.md).
+完成：
 
-Expected entity IDs:
+```text
+NodeMCU
+SN74HC595
+9 × LED
+9 × 330Ω
+```
+
+先不要急著接 TDX。
+
+第一階段只要做到：
+
+```text
+All LEDs On
+All LEDs Off
+Chase Test
+```
+
+都正常即可。
+
+---
+
+# 2. 建立 ESPHome 裝置
+
+使用：
+
+```text
+esphome/tymetro-led.yaml
+```
+
+真正的 secret 放在 ESPHome private secrets。
+
+可參考：
+
+```text
+esphome/secrets.example.yaml
+```
+
+至少需要：
+
+```yaml
+wifi_ssid:
+wifi_password:
+tymetro_api_encryption_key:
+tymetro_fallback_password:
+```
+
+不要直接把真實值寫進公開 repo 版本。
+
+---
+
+# 3. 寫入 ESPHome 韌體
+
+第一次可 USB flash。
+
+之後可 OTA。
+
+完成後確認：
+
+- Device online
+- HA 發現 ESPHome Device
+- A1～A9 switch 存在
+- 三個 test button 存在
+
+---
+
+# 4. 建立 Home Assistant Helpers
+
+請看：
+
+```text
+home-assistant/helpers.md
+```
+
+需要：
 
 ```text
 input_select.tymetro_direction
@@ -20,26 +93,84 @@ input_boolean.tymetro_live_mode
 timer.tymetro_live_session
 ```
 
-## 3. Create TDX credentials
+Direction Options 必須完全一致：
 
-Create a TDX application and obtain:
+```text
+← 往 A1 台北
+往 A9 林口 →
+```
 
-- Client ID
-- Client Secret
+---
 
-Add this to your private Home Assistant `secrets.yaml` (see `home-assistant/secrets.example.yaml`):
+# 5. 啟用 Python Script 整合
+
+`configuration.yaml` 必須包含：
+
+```yaml
+python_script:
+```
+
+如果本來已有：
+
+```yaml
+python_script:
+```
+
+不要重複建立第二個同名 top-level key。
+
+---
+
+# 6. 放入 Tracker Script
+
+把：
+
+```text
+home-assistant/python_scripts/tymetro_tracker.py
+```
+
+放到：
+
+```text
+/homeassistant/python_scripts/tymetro_tracker.py
+```
+
+---
+
+# 7. 設定 TDX 憑證
+
+到 Home Assistant：
+
+```text
+/homeassistant/secrets.yaml
+```
+
+加入：
 
 ```yaml
 tdx_auth_payload: 'grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET'
 ```
 
-Keep the entire form body inside quotes.
+將 placeholder 換成你自己的 TDX credential。
 
-## 4. Merge Home Assistant configuration
+**不要上傳 secrets.yaml 到 Git。**
 
-Use [../home-assistant/configuration-snippet.yaml](../home-assistant/configuration-snippet.yaml).
+---
 
-It contains these top-level keys:
+# 8. 合併 configuration-snippet.yaml
+
+開：
+
+```text
+home-assistant/configuration-snippet.yaml
+```
+
+合併到你的：
+
+```text
+/homeassistant/configuration.yaml
+```
+
+特別注意：
 
 ```yaml
 python_script:
@@ -49,170 +180,302 @@ rest_command:
 template:
 ```
 
-If your existing `configuration.yaml` already has any of those keys, **merge the child entries**. Do not create duplicate top-level YAML keys.
+Home Assistant 同一個 top-level key 不能隨便重複。
 
-Run:
+如果你原本就有：
 
-```text
-Developer Tools -> YAML -> Check configuration
+```yaml
+recorder:
 ```
 
-before restarting Home Assistant.
+要把 `exclude.entities` 合併進去。
 
-## 5. Install the Python tracker
+不是再貼第二個：
 
-Copy:
-
-```text
-home-assistant/python_scripts/tymetro_tracker.py
+```yaml
+recorder:
 ```
 
-to:
+---
+
+# 9. 檢查 Home Assistant 設定
+
+在 Restart 前先跑：
 
 ```text
-/homeassistant/python_scripts/tymetro_tracker.py
+Check configuration
 ```
 
-After `python_script:` has been enabled and Home Assistant has restarted once, the action should appear as:
+確定 YAML 正常。
+
+---
+
+# 10. 重新啟動 Home Assistant
+
+重新啟動後先確認：
+
+```text
+sensor.tdx_token
+```
+
+存在。
+
+接著等待 Static Model。
+
+---
+
+# 11. 確認靜態資料模型
+
+確認：
+
+```text
+sensor.tymetro_static_model_raw
+```
+
+State：
+
+```text
+ready
+```
+
+Attribute：
+
+```text
+s2s_http = 200
+stopping_pattern_http = 200
+timetable_a1_http = 200
+timetable_a8_http = 200
+```
+
+如果不是 `ready`，先不要除錯 ESPHome，因為 Tracker Core 還沒有資料。
+
+---
+
+# 12. 加入 Automations
+
+加入：
+
+```text
+home-assistant/automations/live-session-control.yaml
+home-assistant/automations/tracker-engine.yaml
+home-assistant/automations/abort-stale-live.yaml
+```
+
+可以用 HA UI 建立 YAML Automation，再貼內容。
+
+---
+
+# 13. 啟用 Tracker Engine
+
+確認：
+
+```text
+TYMetro - Tracker Engine
+```
+
+已 Enabled。
+
+它會在：
+
+```text
+每 5 秒
+Direction 改變
+Live Mode 改變
+Static Model fetched_at 改變
+LiveBoard fetched_at 改變
+```
+
+執行：
 
 ```text
 python_script.tymetro_tracker
 ```
 
-Execute it manually once in Developer Tools.
+---
 
-Expected output entities:
+# 14. 確認 Tracker Entity
+
+找到：
 
 ```text
 sensor.tymetro_tracker
+```
+
+正常應看到：
+
+```text
+state = schedule
+```
+
+或：
+
+```text
+schedule_live_pending
+schedule_live_stale
+live
+```
+
+並有：
+
+```text
+trains
+frame_a
+frame_b
+```
+
+---
+
+# 15. 確認 LED Frame
+
+應出現：
+
+```text
 sensor.tymetro_led_frame_a
 sensor.tymetro_led_frame_b
 ```
 
-## 6. Add automations
-
-Create three Home Assistant automations using the files in:
+值：
 
 ```text
-home-assistant/automations/
+0～511
 ```
 
-### Live Session Control
+---
 
-Starts/cancels the 15-minute timer and automatically switches Live Mode off when the timer ends.
+# 16. ESPHome 接收 Frame
 
-### Tracker Engine
+ESPHome Device log 應該能看到 HA API connection。
 
-Runs the Python tracker every 5 seconds and immediately after relevant state changes.
+然後：
 
-This does **not** call TDX every 5 seconds. It only recalculates from already-ingested Home Assistant state.
+```text
+tymetro_frame_a
+tymetro_frame_b
+```
 
-### Abort Stale Live
+會取得 HA sensor state。
 
-If Live Mode was enabled but the TDX source remains stale after 40 seconds, the configured automation turns Live Mode off and shows a persistent notification. Run the acceptance test in `docs/verification.md` on your own HA instance.
+ESPHome 每 600 ms 在本機 renderer。
 
-## 7. Flash ESPHome
+---
 
-Copy [../esphome/tymetro-led.yaml](../esphome/tymetro-led.yaml) into ESPHome Device Builder.
+# 17. 安裝 Dashboard 自訂卡片
 
-Create secrets based on [../esphome/secrets.example.yaml](../esphome/secrets.example.yaml).
-
-Validate first, then install via USB or OTA.
-
-Verify:
-
-- device connects to Home Assistant Native API
-- `sensor.tymetro_led_frame_a` and `sensor.tymetro_led_frame_b` are visible to ESPHome
-- physical LEDs follow the tracker automatically
-
-## 8. Install the dashboard card
-
-Copy:
+將：
 
 ```text
 dashboard/tymetro-tracker-card.js
 ```
 
-to:
+放到：
 
 ```text
 /homeassistant/www/tymetro-tracker-card.js
 ```
 
-Add a Lovelace resource:
+---
+
+# 18. 加入 Dashboard 資源
+
+在 Home Assistant Dashboard Resource 新增：
 
 ```text
 /local/tymetro-tracker-card.js?v=2
 ```
 
-Resource type:
+類型：
 
 ```text
 JavaScript Module
 ```
 
-When replacing the JavaScript file, increment the `?v=` query string to avoid browser cache confusion.
+如果第一次建立 `/homeassistant/www/` 後 `/local/...` 404，可 Restart HA 一次。
 
-## 9. Add the dashboard view
-
-Use [../dashboard/view.yaml](../dashboard/view.yaml).
-
-The card directly controls:
-
-- direction selector
-- Live Mode
-
-and reads:
-
-- tracker train objects
-- timer
-- static model status
-- LiveBoard status
-
-## 10. Validate schedule mode
-
-With Live Mode OFF:
-
-1. Switch to `← 往 A1 台北`.
-2. Confirm train list and animated markers update.
-3. Switch to `往 A9 林口 →`.
-4. Confirm physical LEDs change direction representation.
-5. Confirm `updated_at` changes roughly every 5 seconds.
-
-## 11. Validate Live Mode
-
-Enable Live Mode.
-
-Expected healthy path:
+瀏覽器更新：
 
 ```text
-Live ON
--> LiveBoard fetch
--> schedule_live_pending
--> matching succeeds
--> live
--> live_correction_active = true
+Ctrl + F5
 ```
 
-Expected stale path:
+---
+
+# 19. 加入「機捷」頁面
+
+使用：
 
 ```text
-Live ON
--> LiveBoard fetch returns old SrcUpdateTime
--> schedule_live_stale
--> schedule display continues
--> after ~40 s Live Mode automatically turns OFF
+dashboard/view.yaml
 ```
 
-Do not increase the stale threshold simply to make the UI say `live`. Old ETA data is worse than a clearly labeled schedule fallback.
+加入既有 Dashboard 的：
 
-
-## 12. Public-repository safety check (optional)
-
-Before publishing a copy of the project:
-
-```bash
-python scripts/public-safety-check.py
+```yaml
+views:
 ```
 
-Then review [public-release-checklist.md](public-release-checklist.md). The script checks only the current working tree; it cannot prove old Git commits never contained a secret.
+---
+
+# 20. 時刻表模式驗收
+
+保持：
+
+```text
+Live Mode OFF
+```
+
+確認：
+
+1. Tracker state = `schedule`
+2. train_count 合理
+3. Dashboard marker 移動
+4. Frame A/B 變動
+5. 實體 LED 變動
+6. 切換 A1 / A9 方向有反應
+
+---
+
+# 21. 即時模式驗收
+
+開啟：
+
+```text
+TDX 即時模式
+```
+
+預期：
+
+```text
+Timer = 15:00
+LiveBoard 開始每 30 秒取得
+```
+
+若 TDX source 新鮮：
+
+```text
+schedule_live_pending
+→ live
+```
+
+若 source 太舊：
+
+```text
+schedule_live_stale
+```
+
+Schedule 繼續。
+
+---
+
+# 22. 驗收文件
+
+完整測試流程：
+
+[verification.md](verification.md)
+
+故障排除：
+
+[troubleshooting.md](troubleshooting.md)
+
+TDX 資料：
+
+[tdx-data.md](tdx-data.md)

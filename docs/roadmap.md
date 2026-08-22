@@ -1,59 +1,114 @@
-# Roadmap
+# 開發路線圖
 
-## V1 — considered complete
+Roadmap 以「是否值得增加實際功能」為原則，不追求為了持續開發而開發。
 
-The following areas are intentionally frozen unless a new requirement appears:
+---
 
-- A1–A9 breadboard hardware
-- NodeMCU + single SN74HC595 architecture
-- one selected physical direction
-- ESPHome 600 ms two-frame renderer
-- schedule trajectory engine
-- Local / Express schedule modeling
-- animated Lovelace V2 UI
+# v0.1 — V1 時刻表 Tracker
 
-## Realtime / data-quality work
+狀態：
 
-Priority items:
+```text
+✅ 完成
+```
 
-- validate LiveBoard matching while TYMC source data is genuinely fresh
-- compare correction offsets over several consecutive LiveBoard refreshes
-- validate Local matching
-- validate Express matching, especially around A3 / A8
-- confirm correction persistence and handoff behavior
-- add more diagnostics only if field validation reveals ambiguity
+包含：
 
-## Reliability work
+- A1～A9
+- 普通 / 直達
+- Schedule trajectory
+- 5 秒 Tracker Engine
+- Frame A/B
+- NodeMCU
+- SN74HC595
+- 9 LED
+- 600 ms renderer
+- Direction
+- Animated Dashboard
+- LiveBoard ingestion
+- stale fallback
 
-Optional future hardening:
+---
 
-- implement and field-test durable static-model caching for TDX-unavailable cold starts
-- expose a clear “static model age” diagnostic
-- test HA restart during TDX outage
-- test ESPHome reconnect behavior after prolonged HA outage
+# v0.2 — 即時資料驗證
 
-Do not claim offline cold-start support until it is actually tested.
+優先：
 
-## Dashboard ideas
+```text
+🟡 待 TDX TYMC 上游恢復新鮮資料
+```
 
-The current UI is considered sufficient for V1.
+目標：
 
-Possible future improvements:
+- 驗證 Fresh LiveBoard
+- 驗證 schedule-to-live matching
+- 驗證 delay correction
+- 驗證 `mode = live`
+- 驗證 `live_correction_active`
+- 驗證 Dashboard / LED 校正後結果
+- 驗證 40 秒 stale auto-abort
 
-- selected-train detail strip
-- scheduled next-station time
-- realtime delay badge
-- simultaneous two-direction web view
-- A1–A22 expansion
+---
 
-## Physical hardware ideas
+# v0.3 — 可靠性強化
 
-Only pursue if the project scope changes:
+視需求實作：
 
-- second LED row for opposite direction
-- daisy-chain another SN74HC595
-- full A1–A22 physical map
-- perfboard / PCB
-- enclosure / printed labels
-- higher-current output drivers
-- brightness control
+- Static Model persistent cache
+- HA cold start offline fallback
+- Static cache timestamp
+- Frame age watchdog
+- TDX health metadata
+- 更完整 error state
+
+---
+
+# v0.4 — 實體裝置永久化
+
+若希望從 Breadboard 變永久裝置：
+
+- 洞洞板 / PCB
+- 0.1 µF decoupling
+- 外殼
+- 印刷 A1～A9 station label
+- USB-C / 更穩定供電
+- Wall mount / Desk display
+
+---
+
+# v0.5 — 路線擴充
+
+可選：
+
+- A1～A22
+- 串接第二 / 第三顆 74HC595
+- Dashboard 全線
+- 依 viewport 顯示局部線段
+
+---
+
+# 未來構想
+
+不承諾實作：
+
+- 雙方向同時 LED
+- 雙排 LED
+- OLED 狀態資訊
+- RGB train type
+- 實體按鍵方向切換
+- Web configuration
+- MQTT alternative
+- Train detail interaction
+- 目的地 / delay 詳細顯示
+
+---
+
+# 目前原則
+
+V1 UI / 硬體已足夠使用。
+
+下一個真正有價值的工程里程碑是：
+
+> **TDX LiveBoard realtime matching 實際驗證成功。**
+
+除非有新需求，不建議繼續無限美化目前 UI 或 Breadboard。
