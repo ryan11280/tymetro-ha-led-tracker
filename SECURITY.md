@@ -1,36 +1,57 @@
 # Security Notes
 
-This repository is designed to contain only sanitized configuration.
+This repository should contain **only sanitized configuration**.
 
 ## Never commit
 
 - TDX Client ID
 - TDX Client Secret
-- TDX access tokens
+- TDX OAuth access tokens
 - Home Assistant long-lived access tokens
 - ESPHome Native API encryption keys
-- Wi-Fi SSID/password if sensitive
+- actual Wi-Fi passwords
 - ESPHome fallback hotspot passwords
-- Any externally reachable Home Assistant URL or credential
+- private TLS keys / certificates
+- unrelated personal configuration
 
-## Home Assistant secrets
+## Home Assistant secret
 
-The project expects a TDX auth payload in Home Assistant `secrets.yaml`:
+The project expects a private Home Assistant `secrets.yaml` entry:
 
 ```yaml
 tdx_auth_payload: 'grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET'
 ```
 
-The value must be quoted because the form body contains `&` characters.
+The repository configuration references it with:
+
+```yaml
+payload: !secret tdx_auth_payload
+```
 
 ## ESPHome secrets
 
-Copy `esphome/secrets.example.yaml` to your own ESPHome secrets file and replace all placeholders.
+The public repository contains only `esphome/secrets.example.yaml`.
 
-## Rotate previously exposed credentials
+Real values belong in the normal private ESPHome secrets mechanism.
 
-If a secret has ever been pasted into a chat, screenshot, issue, gist, or commit, treat it as exposed and rotate it even if this repository is private.
+## Rotation rule
 
-## Repository visibility
+If a credential has ever appeared in a chat, screenshot, issue, gist, log excerpt, or commit, rotate it before treating the system as clean for public exposure.
 
-The project currently targets a private GitHub repository. Private visibility is still not a substitute for proper secret handling.
+## Git history warning
+
+Removing a secret from the latest file does not remove it from old Git commits.
+
+Before changing a previously private repository to Public, inspect the full history with a secret-scanning tool and rotate anything that may have been exposed.
+
+## Repository scanner
+
+Run:
+
+```bash
+python scripts/public-safety-check.py
+```
+
+The scanner checks common accidental-disclosure patterns. It is intentionally conservative and cannot guarantee that arbitrary secrets are absent.
+
+See [docs/public-release-checklist.md](docs/public-release-checklist.md).

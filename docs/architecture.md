@@ -196,3 +196,22 @@ The ESP8266 alternates these frames every 600 ms. This is intentionally local an
 The physical prototype has only one row of nine LEDs. Showing both directions simultaneously would make the display ambiguous, so `input_select.tymetro_direction` chooses the direction represented on the physical board.
 
 The dashboard can later evolve beyond this hardware limitation.
+
+## Physical-renderer design boundary
+
+The hardware renderer deliberately does not know about TDX, timetable records, train types, or direction semantics. Its contract is only:
+
+```text
+Frame A integer (0..511)
+Frame B integer (0..511)
+```
+
+The ESP8266 converts those bits to nine outputs every 600 ms. This separation is what allows the physical board to remain stable even while the Home Assistant UI/data model becomes more sophisticated.
+
+See [led-rendering.md](led-rendering.md) for the exact station / station-between semantics and [hardware.md](hardware.md) for the verified electrical wiring.
+
+## Reliability boundary
+
+Schedule movement is locally calculated after the static model is available. LiveBoard is optional and never replaces the schedule backbone.
+
+The current V1 does not make a stronger claim that it can always recover from a **cold Home Assistant restart during a total TDX static-API outage**. That case is tracked separately as future reliability hardening; see [reliability.md](reliability.md).

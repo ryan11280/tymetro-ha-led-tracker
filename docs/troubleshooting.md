@@ -98,3 +98,16 @@ Increment `?v=N` whenever replacing the JS file.
 ### Old UI still appears
 
 Usually browser/Lovelace resource caching. Increment the resource query string and hard-refresh.
+
+## Cold restart while TDX static APIs are unavailable
+
+Schedule calculations require a usable `sensor.tymetro_static_model_raw` model. The current V1 has not field-validated a durable offline static cache for arbitrary cold restarts.
+
+If the tracker reports `unavailable` after a restart, inspect:
+
+```text
+sensor.tdx_token
+sensor.tymetro_static_model_raw
+```
+
+and the four static HTTP status attributes. Do not confuse this with LiveBoard failure: LiveBoard can be completely unavailable while an already-loaded schedule model continues operating normally.

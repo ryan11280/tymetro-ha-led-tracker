@@ -106,3 +106,7 @@ This keeps request volume intentionally low.
 ## Service status
 
 Observed/used behavior treats `ServiceStatus: 0` as normal service. Non-normal records are excluded from Live matching.
+
+## Token refresh behavior
+
+TDX determines the actual token lifetime through the OAuth response `expires_in` value. The Home Assistant reference configuration stores that value and refreshes the REST token entity on a conservative 12-hour scan interval; it does not rely on a hard-coded claim that TDX tokens always last a particular number of hours.

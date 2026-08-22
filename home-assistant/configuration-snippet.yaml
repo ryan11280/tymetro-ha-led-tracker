@@ -22,7 +22,7 @@ recorder:
 # TDX authentication
 #
 # secrets.yaml:
-# tdx_auth_payload: 'grant_type=client_credentials&client_id=XXX&client_secret=XXX'
+# tdx_auth_payload: 'grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET'
 # ============================================================
 
 rest:

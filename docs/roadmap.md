@@ -1,38 +1,59 @@
 # Roadmap
 
-## Near term
+## V1 — considered complete
 
-- Validate LiveBoard matching while TYMC realtime source is fresh.
-- Compare calculated delay offsets with station ETA changes across several refreshes.
-- Verify Local / Express matching at A3 and A8.
-- Add clearer diagnostics for unmatched LiveBoard events.
+The following areas are intentionally frozen unless a new requirement appears:
 
-## Data quality
+- A1–A9 breadboard hardware
+- NodeMCU + single SN74HC595 architecture
+- one selected physical direction
+- ESPHome 600 ms two-frame renderer
+- schedule trajectory engine
+- Local / Express schedule modeling
+- animated Lovelace V2 UI
 
-- Evaluate TDX health metadata / source-health signaling without breaking the existing parser.
-- Track both platform `UpdateTime` and source `SrcUpdateTime`.
-- Consider adaptive stale thresholds only if justified by observed TYMC update cadence.
+## Realtime / data-quality work
 
-## Dashboard
+Priority items:
 
-Current V2 UI is intentionally stable for now.
+- validate LiveBoard matching while TYMC source data is genuinely fresh
+- compare correction offsets over several consecutive LiveBoard refreshes
+- validate Local matching
+- validate Express matching, especially around A3 / A8
+- confirm correction persistence and handoff behavior
+- add more diagnostics only if field validation reveals ambiguity
 
-Possible future additions:
+## Reliability work
+
+Optional future hardening:
+
+- implement and field-test durable static-model caching for TDX-unavailable cold starts
+- expose a clear “static model age” diagnostic
+- test HA restart during TDX outage
+- test ESPHome reconnect behavior after prolonged HA outage
+
+Do not claim offline cold-start support until it is actually tested.
+
+## Dashboard ideas
+
+The current UI is considered sufficient for V1.
+
+Possible future improvements:
 
 - selected-train detail strip
-- scheduled arrival time at next station
-- realtime delay badge when correction is active
-- expand A1–A9 to A1–A22 in the web UI
-- optional simultaneous two-direction dashboard view
+- scheduled next-station time
+- realtime delay badge
+- simultaneous two-direction web view
+- A1–A22 expansion
 
-## Physical hardware
+## Physical hardware ideas
 
-Possible future revisions:
+Only pursue if the project scope changes:
 
-- second LED row for the opposite direction
-- additional shift registers for more stations
-- PCB / perfboard build
-- enclosure with printed A1–A9 station labels
+- second LED row for opposite direction
+- daisy-chain another SN74HC595
+- full A1–A22 physical map
+- perfboard / PCB
+- enclosure / printed labels
+- higher-current output drivers
 - brightness control
-
-The current breadboard design should remain the reference implementation because it is simple and easy to reproduce.

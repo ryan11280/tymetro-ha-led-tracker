@@ -27,7 +27,7 @@ Create a TDX application and obtain:
 - Client ID
 - Client Secret
 
-Add this to Home Assistant `secrets.yaml`:
+Add this to your private Home Assistant `secrets.yaml` (see `home-assistant/secrets.example.yaml`):
 
 ```yaml
 tdx_auth_payload: 'grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET'
@@ -109,7 +109,7 @@ This does **not** call TDX every 5 seconds. It only recalculates from already-in
 
 ### Abort Stale Live
 
-If Live Mode was enabled but the TDX source remains stale after 40 seconds, turns Live Mode off and shows a persistent notification.
+If Live Mode was enabled but the TDX source remains stale after 40 seconds, the configured automation turns Live Mode off and shows a persistent notification. Run the acceptance test in `docs/verification.md` on your own HA instance.
 
 ## 7. Flash ESPHome
 
@@ -205,3 +205,14 @@ Live ON
 ```
 
 Do not increase the stale threshold simply to make the UI say `live`. Old ETA data is worse than a clearly labeled schedule fallback.
+
+
+## 12. Public-repository safety check (optional)
+
+Before publishing a copy of the project:
+
+```bash
+python scripts/public-safety-check.py
+```
+
+Then review [public-release-checklist.md](public-release-checklist.md). The script checks only the current working tree; it cannot prove old Git commits never contained a secret.
